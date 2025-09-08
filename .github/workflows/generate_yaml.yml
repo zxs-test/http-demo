@@ -8,6 +8,8 @@ jobs:
   generate-yaml:
     if: contains(github.event.issue.labels.*.name, 'component-versions')
     runs-on: ubuntu-latest
+    outputs:
+      artifact_url: ${{ steps.upload-yaml.outputs.artifact-url }}
 
     steps:
     - name: Checkout code
@@ -20,7 +22,6 @@ jobs:
         ISSUE_BODY="${{ github.event.issue.body }}"
         
         # 解析表单数据（这里需要根据实际表单结构进行调整）
-        # 这只是示例，实际需要更复杂的解析逻辑
         HELM_VERSION=$(echo "$ISSUE_BODY" | grep -oP '(?<=Kubernetes Helm Version:).*' | xargs)
         ETCD_VERSION=$(echo "$ISSUE_BODY" | grep -oP '(?<=ETCD Version:).*' | xargs)
         # 解析其他字段...
@@ -28,9 +29,9 @@ jobs:
         # 创建YAML内容
         cat > component_versions.yaml << EOF
         kubernetes:
-          helm_version: $HELM_VERSION
+          helm_version: ${HELM_VERSION}
         etcd:
-          etcd_version: $ETCD_VERSION
+          etcd_version: ${ETCD_VERSION}
         image_registry:
           keepalived_version: 2.0.20
           harbor_version: v2.6.3
@@ -67,17 +68,41 @@ jobs:
             tag: 1.21.1
         EOF
 
-        # 输出YAML内容
-        echo "Generated YAML:"
-        cat component_versions.yaml
-        
-        # 保存YAML内容供后续步骤使用
-        echo "yaml_content<<EOF" >> $GITHUB_OUTPUT
-        cat component_versions.yaml >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
+        echo "YAML file generated successfully"
 
     - name: Upload YAML file
+      id: upload-yaml
       uses: actions/upload-artifact@v4
       with:
-        name: component-versions
+        name: component-versions-${{ github.event.issue.number }}
         path: component_versions.yaml
+        retention-days: 7
+
+    - name: Get artifact URL
+      id: artifact-info
+      run: |
+        # 构造artifact下载页面URL
+        ARTIFACT_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        echo "artifact-url=${ARTIFACT_URL}" >> $GITHUB_OUTPUT
+
+  comment-on-issue:
+    if: contains(github.event.issue.labels.*.name, 'component-versions')
+    needs: [generate-yaml]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add comment with artifact URL to issue
+        uses: actions-cool/issues-helper@v3
+        with:
+          actions: "create-comment"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          issue-number: ${{ github.event.issue.number }}
+          body: |
+            🎉 您的组件版本YAML文件已生成！
+
+            📦 生成的YAML文件已作为工件上传，您可以通过以下链接下载：
+            ${{ needs.generate-yaml.outputs.artifact_url }}
+
+            ⚠️ 注意：工件将在7天后自动删除，请及时下载。
+
+            ---
+            *自动生成于 ${{ github.event.issue.updated_at }}*

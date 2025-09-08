@@ -1,0 +1,83 @@
+name: Generate Component Versions YAML
+
+on:
+  issues:
+    types: [opened, edited]
+
+jobs:
+  generate-yaml:
+    if: contains(github.event.issue.labels.*.name, 'component-versions')
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Generate YAML from issue
+      id: generate_yaml
+      run: |
+        # 从issue body中提取数据
+        ISSUE_BODY="${{ github.event.issue.body }}"
+        
+        # 解析表单数据（这里需要根据实际表单结构进行调整）
+        # 这只是示例，实际需要更复杂的解析逻辑
+        HELM_VERSION=$(echo "$ISSUE_BODY" | grep -oP '(?<=Kubernetes Helm Version:).*' | xargs)
+        ETCD_VERSION=$(echo "$ISSUE_BODY" | grep -oP '(?<=ETCD Version:).*' | xargs)
+        # 解析其他字段...
+        
+        # 创建YAML内容
+        cat > component_versions.yaml << EOF
+        kubernetes:
+          helm_version: $HELM_VERSION
+        etcd:
+          etcd_version: $ETCD_VERSION
+        image_registry:
+          keepalived_version: 2.0.20
+          harbor_version: v2.6.3
+          dockercompose_version: v2.12.2
+          docker_registry_version: 2.8.3
+        cri:
+          container_manager: docker
+          sandbox_image:
+            tag: "3.6"
+          crictl_version: v1.23.0
+          docker_version: 20.10.18
+          cridockerd_version: v0.3.10
+          containerd_version: v1.6.8
+          runc_version: v1.1.4
+        cni:
+          multus:
+            image:
+              tag: v3.9.3
+          calico_version: v3.24.5
+          cilium_version: 1.12.6
+          kubeovn_version: 1.10.0
+          hybridnet_version: 0.6.8
+        storage_class:
+          local:
+            provisioner_image:
+              tag: 3.3.0
+            linux_utils_image:
+              tag: 3.3.0
+          nfs_provisioner_version: 4.0.2
+        dns:
+          dns_image:
+            tag: v1.8.6
+          dns_cache_image:
+            tag: 1.21.1
+        EOF
+
+        # 输出YAML内容
+        echo "Generated YAML:"
+        cat component_versions.yaml
+        
+        # 保存YAML内容供后续步骤使用
+        echo "yaml_content<<EOF" >> $GITHUB_OUTPUT
+        cat component_versions.yaml >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Upload YAML file
+      uses: actions/upload-artifact@v4
+      with:
+        name: component-versions
+        path: component_versions.yaml

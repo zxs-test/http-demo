@@ -89,6 +89,9 @@ jobs:
     if: contains(github.event.issue.labels.*.name, 'component-versions')
     needs: [generate-yaml]
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: write
     steps:
       - name: Add comment with artifact URL to issue
         uses: actions-cool/issues-helper@v3
